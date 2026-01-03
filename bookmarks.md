@@ -1,3 +1,92 @@
+# Saturday, January 3, 2026
+
+## @bcherny - How I Use Claude Code
+> I'm Boris and I created Claude Code. Lots of people have asked how I use Claude Code, so I wanted to show off my setup a bit.
+>
+> My setup might be surprisingly vanilla! Claude Code works great out of the box, so I personally don't customize it much. There is no one correct way to use Claude Code: we intentionally build it in a way that you can use it, customize it, and hack it however you like. Each person on the Claude Code team uses it very differently.
+>
+> So, here goes.
+
+- **Tweet:** https://x.com/bcherny/status/2007179832300581177
+- **What:** Thread from Claude Code creator Boris Cherny about his personal setup and workflow. Provides insights into how the tool's creator uses it, emphasizing vanilla configuration and intentional flexibility.
+
+## @BlogJulianKomar - Strong Stocks Screener on TradingView
+> I've just published my Strong Stocks Screener on
+> @tradingview — and it's become my go-to tool for spotting true market leaders. 🚀💰
+>
+> If your goal is to trade strength, this is exactly how I filter 👇
+>
+> 1) Exceptional Relative Strength
+> I focus on stocks already up 70%+ from their 52-week lows. Real leaders move early — not after everyone notices them.
+>
+> 2) Clean, Tight Structures
+> Flags, VCPs, compact bases. No messy price action. Strength shows up through contraction, not randomness.
+>
+> 3) Clear Volume Accumulation
+> Multiple up-days with 1.5–2x average volume. That's institutional buying leaving footprints.
+>
+> 4) Strong Fundamental Growth
+> EPS growth 50%+, sales growth 20%+ YoY. Serious growth pulls in serious capital.
+>
+> 5) Active Market Themes
+> AI infrastructure, batteries, crypto miners, space, drones. Momentum needs a story institutions care about.
+>
+> 6) Favorable Risk vs. Reward
+> I only take setups with a realistic +50–100% upside and clearly defined risk. If the numbers don't line up, I pass.
+>
+> Here's the TradingView screener:
+> 🔗 https://t.co/nSy4nNasYR
+>
+> I run this every day and every week. Simple. Structured. Repeatable.
+> It's how I consistently find the strongest stocks in the market.
+>
+> I've taught this exact process to thousands of traders.
+> You can learn it too — structure beats everything.
+
+- **Tweet:** https://x.com/BlogJulianKomar/status/2006356930629972453
+- **Link:** https://www.tradingview.com/screener/KZAnxsfO/
+- **What:** TradingView stock screener for identifying market leaders with strong relative strength (70%+ from 52-week lows), clean chart structures, volume accumulation, 50%+ EPS growth, and active themes.
+
+## @alex_prompter - RAG Semantic Collapse Problem
+> 🚨 RAG is broken and nobody's talking about it.
+>
+> Stanford just exposed the fatal flaw killing every "AI that reads your docs" product.
+>
+> It's called "Semantic Collapse", and it happens the moment your knowledge base hits critical mass.
+>
+> Here's the brutal math (and why your RAG system is already dying):
+
+- **Tweet:** https://x.com/alex_prompter/status/2006304107196539292
+- **What:** Thread about "Semantic Collapse" in RAG (Retrieval-Augmented Generation) systems, claiming Stanford research exposed fundamental scaling issues when knowledge bases grow large.
+
+## @cloudxdev - Terminal UI Design Skill
+> Terminal UI Skill that I use, bookmark it 📂
+>
+> ---
+> name: terminal-ui-design
+> description: Create distinctive, production-grade terminal user interfaces with high design quality. Use this skill when the user asks to build CLI tools, TUI applications, or terminal-based interfaces. Generates creative, polished code that avoids generic terminal aesthetics.
+> ---
+>
+> [Full skill prompt including design thinking, box drawing, color themes, typography, layout, animations, data display, decorative elements, anti-patterns, and library references for Python Rich/Textual, Go Bubbletea/Lipgloss, Rust Ratatui, Node.js Ink/Blessed, and ANSI escape codes]
+
+- **Tweet:** https://x.com/cloudxdev/status/2005366222247059480
+- **What:** Comprehensive skill prompt for designing distinctive terminal UIs with specific guidance on aesthetics, box drawing characters, color palettes, typography, layouts, animations, and avoiding generic CLI patterns. Includes library references for Python, Go, Rust, and Node.js.
+
+## @TradeINski - Trading Setups Deep Dive
+> My last active deep dive [1+ year of work]
+>
+> All my trading setups with 2,700+ examples
+>
+> All setups learned from @PradeepBonde
+>
+> Free download - https://t.co/EiPYenUqkh
+
+- **Tweet:** https://x.com/TradeINski/status/2004814824384151646
+- **Link:** https://transfer.it/t/mue0Lc1hBDAZ
+- **What:** Comprehensive trading setups resource with 2,700+ examples from one year of work, teaching setups learned from Pradeep Bonde. Available as free download via Transfer.it.
+
+---
+
 # Friday, January 2, 2026
 
 ## @parcadei - Continuous Claude v2 Context Management
