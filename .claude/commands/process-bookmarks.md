@@ -295,6 +295,10 @@ via: "Twitter bookmark from @{author}"
 - Point 1
 - Point 2
 
+## Full Content
+
+{If full text content is available from the JSON, include it fully formatted in markdown here.}
+
 ## Links
 
 - [Article]({article_url})
@@ -357,7 +361,7 @@ status: needs_transcript
 
 ## Transcript
 
-*Pending transcription*
+{If full transcript text is available, dump it here. Otherwise put "Transcript unavailable"}
 
 ## Links
 

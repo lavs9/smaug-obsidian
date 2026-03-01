@@ -1,0 +1,10 @@
+{
+    "id": "smaug-obsidian-plugin",
+    "name": "Smaug Bookmark Archiver",
+    "version": "1.0.0",
+    "minAppVersion": "0.15.0",
+    "description": "Trigger local Smaug background jobs to archive bookmarks and media into Obsidian.",
+    "author": "Smaug",
+    "authorUrl": "https://github.com/alexknowshtml/smaug",
+    "isDesktopOnly": true
+}

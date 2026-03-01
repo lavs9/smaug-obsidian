@@ -12,10 +12,10 @@
  * - Any other scheduler
  */
 
-import { execSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import OpenAI from 'openai';
 import { fetchAndPrepareBookmarks } from './processor.js';
 import { loadConfig } from './config.js';
 
@@ -58,7 +58,7 @@ function releaseLock() {
         fs.unlinkSync(LOCK_FILE);
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 }
 
 // ============================================================================
@@ -67,7 +67,12 @@ function releaseLock() {
 
 async function invokeClaudeCode(config, bookmarkCount, options = {}) {
   const timeout = config.claudeTimeout || 900000; // 15 minutes default
-  const model = config.claudeModel || 'sonnet'; // or 'haiku' for faster/cheaper
+  let model = config.claudeModel || config.ai?.textModel || 'claude-3-7-sonnet-latest';
+
+  // Force Sonnet for Claude CLI to avoid accidental expensive Opus usage
+  if (!model.includes('sonnet')) {
+    model = 'claude-3-7-sonnet-latest';
+  }
   const trackTokens = options.trackTokens || false;
 
   // Specific tool permissions instead of full YOLO mode
@@ -190,7 +195,7 @@ async function invokeClaudeCode(config, bookmarkCount, options = {}) {
     const elapsed = () => {
       const ms = Date.now() - startTime;
       const secs = Math.floor(ms / 1000);
-      return secs < 60 ? `${secs}s` : `${Math.floor(secs/60)}m ${secs%60}s`;
+      return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
     };
 
     // Progress bar helper
@@ -332,7 +337,7 @@ async function invokeClaudeCode(config, bookmarkCount, options = {}) {
                 if (toolName === 'Write' && input.file_path) {
                   const fileName = input.file_path.split('/').pop();
                   const dir = input.file_path.includes('/knowledge/tools/') ? 'tools' :
-                             input.file_path.includes('/knowledge/articles/') ? 'articles' : '';
+                    input.file_path.includes('/knowledge/articles/') ? 'articles' : '';
                   filesWritten.push(fileName);
                   if (dir) {
                     printStatus(`    💎 Hoarded → ${dir}/${fileName}\n`);
@@ -395,7 +400,7 @@ async function invokeClaudeCode(config, bookmarkCount, options = {}) {
                 const content = typeof block.content === 'string' ? block.content : '';
                 const toolId = block.tool_use_id;
                 if ((content.includes('Processed') || content.includes('completed')) &&
-                    !shownMessages.has(`task-done-${toolId}`)) {
+                  !shownMessages.has(`task-done-${toolId}`)) {
                   shownMessages.add(`task-done-${toolId}`);
                   tasksCompleted++;
                   if (tasksSpawned > 0 && tasksCompleted <= tasksSpawned) {
@@ -592,6 +597,154 @@ ${tokenDisplay}
 }
 
 // ============================================================================
+// OpenRouter API Invocation (CLI Bypass)
+// ============================================================================
+
+async function invokeOpenRouter(config, pendingData, options = {}) {
+  const model = config.ai?.textModel || 'anthropic/claude-3.5-sonnet';
+  const apiKey = config.ai?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    return { success: false, error: 'OpenRouter API key is missing (check config.ai.openRouterApiKey)' };
+  }
+
+  const openai = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: apiKey,
+    defaultHeaders: {
+      'HTTP-Referer': 'https://github.com/alexknowshtml/smaug',
+      'X-Title': 'Smaug Obsidian',
+    }
+  });
+
+  const instructionsPath = path.join(process.cwd(), '.claude/commands/process-bookmarks.md');
+  let instructions = 'Process bookmarks and save them as markdown.';
+  if (fs.existsSync(instructionsPath)) {
+    instructions = fs.readFileSync(instructionsPath, 'utf8');
+  }
+
+  const systemPrompt = `You are Smaug, an intelligent archival agent processing bookmarks.\\n\\nInstructions:\\n${instructions}\\n\\nIMPORTANT: Use the 'write_file' tool to save each bookmark into its appropriate file. For appending to bookmarks.md, you MUST use the 'append_file' tool. Ensure folders are respected.`;
+
+  const bookmarksJson = JSON.stringify(pendingData.bookmarks, null, 2);
+  let messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `Please process these ${pendingData.bookmarks.length} bookmarks:\\n\\n${bookmarksJson}` }
+  ];
+
+  const tools = [
+    {
+      type: "function",
+      function: {
+        name: "write_file",
+        description: "Write full text content to a new file, or overwrite an existing file. This creates directories if they don't exist.",
+        parameters: {
+          type: "object",
+          properties: {
+            file_path: { type: "string", description: "Path to file, eg ./knowledge/articles/slug.md" },
+            content: { type: "string", description: "The content to write" }
+          },
+          required: ["file_path", "content"],
+          additionalProperties: false
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "append_file",
+        description: "Append content to an existing file (like ./bookmarks.md).",
+        parameters: {
+          type: "object",
+          properties: {
+            file_path: { type: "string" },
+            content: { type: "string" }
+          },
+          required: ["file_path", "content"],
+          additionalProperties: false
+        }
+      }
+    }
+  ];
+
+  const tokenUsage = { input: 0, output: 0, model };
+  let filesWritten = 0;
+
+  process.stdout.write(`\\n  🐉 Summoning OpenRouter (${model}) to process ${pendingData.bookmarks.length} treasures...\\n\\n`);
+
+  try {
+    let loops = 0;
+    while (loops < 20) {
+      loops++;
+      const response = await openai.chat.completions.create({
+        model: model,
+        messages: messages,
+        tools: tools,
+        tool_choice: "auto",
+      });
+
+      const message = response.choices[0].message;
+      tokenUsage.input += response.usage?.prompt_tokens || 0;
+      tokenUsage.output += response.usage?.completion_tokens || 0;
+
+      if (message.content) {
+        process.stdout.write(`💬 ${message.content}\\n`);
+      }
+
+      messages.push(message);
+
+      if (!message.tool_calls || message.tool_calls.length === 0) {
+        process.stdout.write(`\\n  🐉 OpenRouter processing complete.\\n`);
+        break;
+      }
+
+      for (const toolCall of message.tool_calls) {
+        const functionName = toolCall.function.name;
+        let args;
+        try {
+          args = JSON.parse(toolCall.function.arguments);
+        } catch (e) {
+          args = {};
+        }
+
+        let result = "";
+
+        try {
+          if (functionName === "write_file" && args.file_path && args.content) {
+            const dir = path.dirname(args.file_path);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(args.file_path, args.content);
+            console.log(`    💎 Hoarded → ${args.file_path}`);
+            filesWritten++;
+            result = "Successly wrote file: " + args.file_path;
+          } else if (functionName === "append_file" && args.file_path && args.content) {
+            const dir = path.dirname(args.file_path);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.appendFileSync(args.file_path, "\\n" + args.content);
+            console.log(`    💎 Appended → ${args.file_path}`);
+            result = "Successfully appended file: " + args.file_path;
+          } else {
+            result = "Error: Invalid arguments provided.";
+          }
+        } catch (e) {
+          result = `Error: ${e.message}`;
+          console.error(`    ❌ Tool error on ${args.file_path}: ${e.message}`);
+        }
+
+        messages.push({
+          tool_call_id: toolCall.id,
+          role: "tool",
+          name: functionName,
+          content: result
+        });
+      }
+    }
+
+    return { success: true, tokenUsage, filesWritten, output: "OpenRouter execution complete" };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ============================================================================
 // Webhook Notifications (Optional)
 // ============================================================================
 
@@ -712,15 +865,24 @@ export async function run(options = {}) {
     // Track IDs we're about to process
     const idsToProcess = pendingData.bookmarks.map(b => b.id);
 
-    // Phase 2: Claude Code analysis (if enabled)
+    // Phase 2: AI analysis (if enabled)
     if (config.autoInvokeClaude !== false) {
-      console.log(`[${now}] Phase 2: Invoking Claude Code for analysis...`);
+      console.log(`[${now}] Phase 2: Invoking AI for analysis...`);
 
-      const claudeResult = await invokeClaudeCode(config, bookmarkCount, {
-        trackTokens: options.trackTokens
-      });
+      let aiResult;
 
-      if (claudeResult.success) {
+      if (config.ai && config.ai.engine === 'openrouter') {
+        aiResult = await invokeOpenRouter(config, pendingData, {
+          trackTokens: options.trackTokens
+        });
+      } else {
+        // Fallback to existing Claude CLI executor
+        aiResult = await invokeClaudeCode(config, bookmarkCount, {
+          trackTokens: options.trackTokens
+        });
+      }
+
+      if (aiResult.success) {
         console.log(`[${now}] Analysis complete`);
 
         // Remove processed IDs from pending file
@@ -750,13 +912,13 @@ export async function run(options = {}) {
           success: true,
           count: bookmarkCount,
           duration: Date.now() - startTime,
-          output: claudeResult.output,
-          tokenUsage: claudeResult.tokenUsage
+          output: aiResult.output,
+          tokenUsage: aiResult.tokenUsage
         };
 
       } else {
-        // Claude failed - bookmarks stay in pending for retry
-        console.error(`[${now}] Claude Code failed:`, claudeResult.error);
+        // AI failed - bookmarks stay in pending for retry
+        console.error(`[${now}] AI Processing failed:`, aiResult.error);
 
         await notify(
           config,

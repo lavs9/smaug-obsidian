@@ -17,6 +17,10 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
 import timezone from 'dayjs/plugin/timezone.js';
 import { loadConfig } from './config.js';
+import { JSDOM } from 'jsdom';
+import { Readability } from '@mozilla/readability';
+import puppeteer from 'puppeteer';
+import OpenAI from 'openai';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -222,28 +226,151 @@ export async function fetchGitHubContent(url) {
   }
 }
 
+export async function extractTranscript(url, config) {
+  const videoFolder = config.categories?.youtube?.folder || './knowledge/videos';
+  if (!fs.existsSync(videoFolder)) {
+    fs.mkdirSync(videoFolder, { recursive: true });
+  }
+
+  try {
+    console.log(`  Attempting to get transcript for ${url}...`);
+    const outputTemplate = path.join(videoFolder, '%(id)s');
+
+    // First, try native subtitles
+    try {
+      const subsCmd = `yt-dlp --skip-download --write-auto-subs --write-subs --sub-format vtt --output '${outputTemplate}.%(ext)s' '${url}'`;
+      execSync(subsCmd, { stdio: 'ignore', timeout: 300000 });
+
+      const files = fs.readdirSync(videoFolder);
+      const urlIdMatch = url.match(/status\/(\\d+)/) || [];
+      const suspectedId = urlIdMatch[1];
+
+      for (const f of files) {
+        if (f.endsWith('.vtt') && (!suspectedId || f.includes(suspectedId))) {
+          console.log(`  Found native subtitles: ${f}`);
+          const vttPath = path.join(videoFolder, f);
+          const text = fs.readFileSync(vttPath, 'utf8');
+
+          // Cleanup
+          fs.unlinkSync(vttPath);
+          return { text, source: 'yt-dlp-subs' };
+        }
+      }
+    } catch (e) {
+      // No native subs found, proceed to fallback
+    }
+
+    // Fallback: Download audio and transcribe
+    if (!config.ai?.audioApiKey) {
+      console.log('  No AI Audio API key configured, cannot fallback to audio transcription.');
+      return { text: '*Transcript unavailable (No native subtitles found. Please configure `ai.audioApiKey` in smaug.config.json or .env for Whisper fallback).*', source: 'error' };
+    }
+
+    console.log('  No native subtitles found. Downloading audio for AI transcription...');
+    const audioCmd = `yt-dlp -f 'bestaudio/best' -x --audio-format m4a --output '${outputTemplate}.%(ext)s' '${url}'`;
+    execSync(audioCmd, { stdio: 'ignore', timeout: 300000 });
+
+    // Find the downloaded m4a
+    const files = fs.readdirSync(videoFolder);
+    let audioPath = null;
+    for (const f of files) {
+      if (f.endsWith('.m4a')) {
+        audioPath = path.join(videoFolder, f);
+        break; // Assume it's the right one for this job
+      }
+    }
+
+    if (!audioPath) {
+      return { text: '*Failed to extract audio track for transcription.*', source: 'error' };
+    }
+
+    console.log('  Transcribing audio with AI...');
+    const openai = new OpenAI({
+      apiKey: config.ai.audioApiKey,
+      baseURL: config.ai.audioBaseUrl || 'https://api.openai.com/v1'
+    });
+
+    const transcription = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(audioPath),
+      model: config.ai.audioModel || 'whisper-1',
+    });
+
+    // Cleanup audio
+    fs.unlinkSync(audioPath);
+
+    return { text: transcription.text, source: 'whisper' };
+
+  } catch (error) {
+    console.log(`  Video transcription failed: ${error.message}`);
+    return null;
+  }
+}
+
+export async function fetchXArticle(url, config) {
+  let browser = null;
+  try {
+    browser = await puppeteer.launch({ headless: 'new' });
+    const page = await browser.newPage();
+
+    if (config.twitter?.authToken) {
+      await page.setCookie({ name: 'auth_token', value: config.twitter.authToken, domain: '.x.com' });
+    }
+    if (config.twitter?.ct0) {
+      await page.setCookie({ name: 'ct0', value: config.twitter.ct0, domain: '.x.com' });
+    }
+
+    console.log(`  Navigating to X article: ${url}...`);
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    if (page.url().includes('login')) {
+      console.log('  Redirected to login, auth tokens might be expired.');
+      return { text: null, source: 'x-article', error: 'Authentication required' };
+    }
+
+    const content = await page.evaluate(() => {
+      const article = document.querySelector('article');
+      if (article) return article.innerText;
+      return document.body.innerText;
+    });
+
+    return { text: content?.slice(0, 50000), source: 'x-article', paywalled: false };
+  } catch (error) {
+    console.log(`  Failed to fetch X article: ${error.message}`);
+    return { text: null, source: 'x-article', error: error.message };
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
 export async function fetchArticleContent(url) {
   try {
     const result = execSync(
-      `curl -sL -m 30 -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" "${url}" | head -c 50000`,
+      `curl -sL -m 30 -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" "${url}" | head -c 500000`,
       { encoding: 'utf8', timeout: 35000 }
     );
 
-    // Check for paywall indicators
-    if (result.includes('Subscribe') && result.includes('sign in') ||
-        result.includes('This article is for subscribers') ||
-        result.length < 1000) {
-      return { text: result, source: 'direct', paywalled: true };
+    const dom = new JSDOM(result, { url });
+    const reader = new Readability(dom.window.document);
+    const parsed = reader.parse();
+
+    let text = result.slice(0, 50000); // fallback
+    if (parsed && parsed.textContent) {
+      text = parsed.textContent.trim().slice(0, 50000);
     }
 
-    return { text: result, source: 'direct', paywalled: false };
+    if (text.includes('Subscribe') && text.includes('sign in') ||
+      text.includes('This article is for subscribers') ||
+      text.length < 500) {
+      return { text, title: parsed?.title, source: 'direct', paywalled: true };
+    }
+
+    return { text, title: parsed?.title, source: 'direct', paywalled: false };
   } catch (error) {
     throw error;
   }
 }
 
 export async function fetchContent(url, type, config) {
-  // Use GitHub API for GitHub URLs
   if (type === 'github') {
     try {
       const ghContent = await fetchGitHubContent(url);
@@ -253,7 +380,17 @@ export async function fetchContent(url, type, config) {
     }
   }
 
-  // For paywalled sites, note for manual handling or custom bypass
+  if (type === 'x-article' || url.includes('x.com/i/article')) {
+    return await fetchXArticle(url, config);
+  }
+
+  if (type === 'video' || type === 'media') {
+    const transcriptData = await extractTranscript(url, config);
+    if (transcriptData) {
+      return transcriptData;
+    }
+  }
+
   if (isPaywalled(url)) {
     console.log(`  Paywalled domain detected: ${url}`);
     return {
@@ -263,7 +400,6 @@ export async function fetchContent(url, type, config) {
     };
   }
 
-  // Try direct fetch for other URLs
   return await fetchArticleContent(url);
 }
 
@@ -303,7 +439,7 @@ export async function fetchAndPrepareBookmarks(options = {}) {
       const pending = JSON.parse(fs.readFileSync(config.pendingFile, 'utf8'));
       pendingIds = new Set(pending.bookmarks.map(b => b.id.toString()));
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // Determine which tweets to process
   let toProcess;
@@ -353,7 +489,9 @@ export async function fetchAndPrepareBookmarks(options = {}) {
           type = 'video';
         } else if (expanded.includes('x.com') || expanded.includes('twitter.com')) {
           if (expanded.includes('/photo/') || expanded.includes('/video/')) {
-            type = 'media';
+            type = 'video';
+          } else if (expanded.includes('/article/')) {
+            type = 'x-article';
           } else {
             type = 'tweet';
             // Quote tweet - fetch the quoted tweet for context
@@ -380,12 +518,12 @@ export async function fetchAndPrepareBookmarks(options = {}) {
           type = 'article';
         }
 
-        // Fetch content for articles and GitHub repos
-        if (type === 'article' || type === 'github') {
+        // Fetch content for articles, videos, and GitHub repos
+        if (type === 'article' || type === 'x-article' || type === 'github' || type === 'video') {
           try {
             const fetchResult = await fetchContent(expanded, type, config);
 
-            if (fetchResult.source === 'github-api') {
+            if (fetchResult && fetchResult.source === 'github-api') {
               content = {
                 name: fetchResult.name,
                 fullName: fetchResult.fullName,
@@ -398,11 +536,13 @@ export async function fetchAndPrepareBookmarks(options = {}) {
                 source: 'github-api'
               };
               console.log(`  GitHub repo: ${fetchResult.fullName} (${fetchResult.stars} stars)`);
-            } else {
+            } else if (fetchResult) {
               content = {
-                text: fetchResult.text?.slice(0, 10000),
+                text: fetchResult.text?.slice(0, 100000),
+                title: fetchResult.title,
                 source: fetchResult.source,
-                paywalled: fetchResult.paywalled
+                paywalled: fetchResult.paywalled,
+                error: fetchResult.error
               };
             }
           } catch (error) {
@@ -483,7 +623,7 @@ export async function fetchAndPrepareBookmarks(options = {}) {
     if (fs.existsSync(config.pendingFile)) {
       existingPending = JSON.parse(fs.readFileSync(config.pendingFile, 'utf8'));
     }
-  } catch (e) {}
+  } catch (e) { }
 
   const existingPendingIds = new Set(existingPending.bookmarks.map(b => b.id));
   const newBookmarks = prepared.filter(b => !existingPendingIds.has(b.id));

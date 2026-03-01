@@ -1,0 +1,61 @@
+{
+  "source": "bookmarks",
+  "archiveFile": "/Users/mayanklavania/Documents/Obsidian/mayanklavania/X-Clippings/bookmarks.md",
+  "pendingFile": "./.state/pending-bookmarks.json",
+  "stateFile": "./.state/bookmarks-state.json",
+  "timezone": "Asia/Kolkata",
+  "twitter": {
+    "authToken": "a8a8604b9562033f5d4dadf7071094e1626a2dd2",
+    "ct0": "fc85f9f3f69cb61b1e80588f9755237008d26e892f7e525fc8f5fd116bfaf4a5b21416aa6531996e69af4e17edcef6f1cefe2de5abb7ef1a33c7cb9e6e972895293a8a1914f3483690afb00bdac2fe14"
+  },
+  "ai": {
+    "openRouterApiKey": null,
+    "textModel": "anthropic/claude-3.5-sonnet",
+    "audioBaseUrl": "https://api.openai.com/v1",
+    "audioApiKey": null,
+    "audioModel": "whisper-1"
+  },
+  "autoInvokeClaude": false,
+  "claudeModel": "sonnet",
+  "categories": {
+    "github": {
+      "match": [
+        "github.com"
+      ],
+      "action": "file",
+      "folder": "/Users/mayanklavania/Documents/Obsidian/mayanklavania/X-Clippings/tools",
+      "template": "tool",
+      "description": "GitHub repositories"
+    },
+    "article": {
+      "match": [
+        "medium.com",
+        "substack.com",
+        "dev.to",
+        "blog",
+        "article"
+      ],
+      "action": "file",
+      "folder": "/Users/mayanklavania/Documents/Obsidian/mayanklavania/X-Clippings/articles",
+      "template": "article",
+      "description": "Blog posts and articles"
+    },
+    "youtube": {
+      "match": [
+        "youtube.com",
+        "youtu.be"
+      ],
+      "action": "file",
+      "folder": "/Users/mayanklavania/Documents/Obsidian/mayanklavania/X-Clippings/videos",
+      "template": "video",
+      "description": "YouTube videos"
+    },
+    "tweet": {
+      "match": [],
+      "action": "capture",
+      "folder": null,
+      "template": null,
+      "description": "Plain tweets"
+    }
+  }
+}

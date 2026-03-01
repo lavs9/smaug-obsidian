@@ -40,6 +40,15 @@ const DEFAULT_CONFIG = {
     ct0: null
   },
 
+  // ---- AI / LLM Configuration ----
+  ai: {
+    openRouterApiKey: null,
+    textModel: 'anthropic/claude-3-sonnet',
+    audioBaseUrl: 'https://api.openai.com/v1',
+    audioApiKey: null,
+    audioModel: 'whisper-1'
+  },
+
   // ---- Categories: Define how different bookmark types are handled ----
   // Each category has:
   //   - match: URL patterns or keywords to identify this type
@@ -151,7 +160,11 @@ export function loadConfig(configPath) {
     ...fileConfig,
     twitter: {
       ...DEFAULT_CONFIG.twitter,
-      ...fileConfig.twitter
+      ...(fileConfig.twitter || {})
+    },
+    ai: {
+      ...DEFAULT_CONFIG.ai,
+      ...(fileConfig.ai || {})
     },
     // Deep merge categories - user categories override defaults
     categories: {
@@ -187,6 +200,13 @@ export function loadConfig(configPath) {
   }
   if (process.env.CT0) {
     config.twitter.ct0 = process.env.CT0;
+  }
+
+  if (process.env.OPENROUTER_API_KEY) {
+    config.ai.openRouterApiKey = process.env.OPENROUTER_API_KEY;
+  }
+  if (process.env.AUDIO_API_KEY) {
+    config.ai.audioApiKey = process.env.AUDIO_API_KEY;
   }
 
   // Automation env vars
@@ -229,6 +249,13 @@ export function initConfig(targetPath = './smaug.config.json') {
     twitter: {
       authToken: 'YOUR_AUTH_TOKEN_HERE',
       ct0: 'YOUR_CT0_TOKEN_HERE'
+    },
+    ai: {
+      openRouterApiKey: 'YOUR_OPENROUTER_KEY',
+      textModel: 'anthropic/claude-3-sonnet',
+      audioBaseUrl: 'https://api.openai.com/v1',
+      audioApiKey: 'YOUR_AUDIO_TRANSCRIPT_KEY',
+      audioModel: 'whisper-1'
     },
 
     // Categories define how different bookmark types are handled
