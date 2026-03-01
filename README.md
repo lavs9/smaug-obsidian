@@ -1,22 +1,8 @@
-# Smaug 🐉
+# Smaug Obsidian 🐉
 
-Archive your Twitter/X bookmarks (and/or optionally, likes) to markdown. Automatically.
+Archive your Twitter/X bookmarks directly into your **Obsidian vault** — automatically, with full content extraction and AI-powered categorization.
 
-*Like a dragon hoarding treasure, Smaug collects the valuable things you bookmark and like.*
-
-## Contents
-
-- [Quick Start](#quick-start-5-minutes)
-- [Getting Twitter Credentials](#getting-twitter-credentials)
-- [What It Does](#what-it-does)
-- [Running](#running)
-- [Categories](#categories)
-- [Automation](#automation)
-- [Output](#output)
-- [Configuration](#configuration)
-- [Claude Code Integration](#claude-code-integration)
-- [Troubleshooting](#troubleshooting)
-- [Credits](#credits)
+*Like a dragon hoarding treasure, Smaug collects the valuable things you bookmark and organizes them straight into your second brain.*
 
 ```
   🔥  🔥  🔥  🔥  🔥  🔥  🔥  🔥  🔥  🔥  🔥  🔥
@@ -29,68 +15,205 @@ Archive your Twitter/X bookmarks (and/or optionally, likes) to markdown. Automat
    🐉 The dragon stirs... treasures to hoard!
 ```
 
-## Quick Start (5 minutes)
+## Contents
+
+- [What's Different in This Fork](#whats-different-in-this-fork)
+- [Quick Start](#quick-start)
+- [Obsidian Plugin](#obsidian-plugin)
+- [Shell Script Integration](#shell-script-integration)
+- [What It Does](#what-it-does)
+- [Configuration](#configuration)
+- [Categories](#categories)
+- [Running Manually](#running-manually)
+- [Basic Mode (No Claude)](#basic-mode-no-claude)
+- [Output](#output)
+- [Troubleshooting](#troubleshooting)
+- [Credits](#credits)
+
+---
+
+## What's Different in This Fork
+
+This is a fork of [alexknowshtml/smaug](https://github.com/alexknowshtml/smaug), adapted to write bookmarks **directly into an Obsidian vault** rather than a local folder.
+
+Key additions in this fork:
+
+| Feature | Description |
+|---------|-------------|
+| **Obsidian Plugin** | Native Obsidian plugin (`plugin/`) — trigger Smaug from the ribbon or command palette |
+| **Obsidian Vault Output** | `archiveFile` and category folders point directly into your Obsidian vault path |
+| **YouTube Category** | New built-in category: YouTube videos filed to `knowledge/videos/` |
+| **OpenRouter AI** | Optional OpenRouter integration for AI processing (not just Claude Code) |
+| **Basic Mode** | `process-basic.js` — fallback processor that works without Claude (e.g. when spending cap is hit) |
+| **Shell Script** | `smaug-obsidian.sh` — a unified runner for fetch/run/basic/status, designed to be triggered from Obsidian's Shell Commands plugin |
+| **IST Timezone** | Defaults to `Asia/Kolkata` instead of `America/New_York` |
+
+---
+
+## Quick Start
 
 ```bash
 # 1. Install bird CLI (Twitter API wrapper)
-# See https://github.com/steipete/bird for installation
+# See https://github.com/steipete/bird
 
-# 2. Clone and install Smaug
-git clone https://github.com/alexknowshtml/smaug
-cd smaug
+# 2. Clone and install
+git clone https://github.com/lavs9/smaug-obsidian.git
+cd smaug-obsidian
 npm install
 
-# 3. Run the setup wizard
-npx smaug setup
+# 3. Edit smaug.config.json with your credentials and vault path
+# (see Configuration section below)
 
-# 4. Run the full job (fetch + process with Claude)
+# 4. Run
+./smaug-obsidian.sh run
+# or
 npx smaug run
 ```
 
-The setup wizard will:
-- Create required directories
-- Guide you through getting Twitter credentials
-- Create your config file
+---
 
-## Manually Getting Twitter Credentials
+## Obsidian Plugin
 
-Smaug uses the bird CLI which needs your Twitter session cookies. 
+The `plugin/` directory contains a native Obsidian plugin that lets you trigger Smaug from inside Obsidian — no terminal required.
 
-If you don't want to use the wizard to make it easy, you can manually put your seession info into the config. 
+### Installation
 
-1. Open Twitter/X in your browser
-2. Open Developer Tools → Application → Cookies
-3. Find and copy these values:
-   - `auth_token`
-   - `ct0`
-4. Add them to `smaug.config.json`:
+1. Copy the `plugin/` folder into your vault's `.obsidian/plugins/smaug-obsidian/` directory
+2. Enable the plugin in **Settings → Community Plugins**
+3. Go to the plugin settings and set the **Smaug Project Directory** to the absolute path of this repo
+
+### Usage
+
+- Click the 🐉 **dragon icon** in the ribbon to run Smaug
+- Or use **Command Palette** → `Run Smaug Bookmark Archiver`
+
+Smaug will fetch your latest bookmarks and file them into your vault. You'll get Obsidian notices on start, success, or failure.
+
+### Building the Plugin
+
+```bash
+cd plugin
+npm install
+npm run build  # outputs main.js
+```
+
+---
+
+## Shell Script Integration
+
+`smaug-obsidian.sh` is a convenience runner designed to work with Obsidian's [Shell Commands plugin](https://github.com/Taitava/obsidian-shellcommands).
+
+```bash
+./smaug-obsidian.sh run     # fetch 10 bookmarks + process (falls back to basic if Claude fails)
+./smaug-obsidian.sh fetch   # fetch only
+./smaug-obsidian.sh basic   # fetch + basic mode (no Claude)
+./smaug-obsidian.sh status  # check pending count
+```
+
+Set the **Smaug Project Directory** variable at the top of the script to match your local path before using.
+
+---
+
+## What It Does
+
+1. **Fetches bookmarks** from Twitter/X using the bird CLI (can also fetch likes, or both)
+2. **Expands t.co links** to reveal actual URLs
+3. **Extracts content** from linked pages (GitHub repos, articles, YouTube videos, quote tweets)
+4. **Categorizes** each tweet by URL pattern (github, article, youtube, or plain tweet)
+5. **Files to your Obsidian vault** — each category gets its own folder inside your vault
+6. **Updates `bookmarks.md`** — a running log of everything processed, organized by date
+
+---
+
+## Configuration
+
+Edit `smaug.config.json`:
 
 ```json
 {
+  "source": "bookmarks",
+  "archiveFile": "/path/to/your/ObsidianVault/X-Clippings/bookmarks.md",
+  "pendingFile": "./.state/pending-bookmarks.json",
+  "stateFile": "./.state/bookmarks-state.json",
+  "timezone": "Asia/Kolkata",
   "twitter": {
-    "authToken": "your_auth_token_here",
-    "ct0": "your_ct0_here"
+    "authToken": "your_auth_token",
+    "ct0": "your_ct0"
+  },
+  "ai": {
+    "openRouterApiKey": null,
+    "textModel": "anthropic/claude-3.5-sonnet",
+    "audioBaseUrl": "https://api.openai.com/v1",
+    "audioApiKey": null,
+    "audioModel": "whisper-1"
+  },
+  "autoInvokeClaude": false,
+  "claudeModel": "sonnet",
+  "categories": { ... }
+}
+```
+
+### Getting Twitter Credentials
+
+1. Open Twitter/X in your browser
+2. Open **Developer Tools → Application → Cookies**
+3. Find and copy `auth_token` and `ct0`
+4. Paste them into `smaug.config.json`
+
+### Key Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `source` | `bookmarks` | What to fetch: `bookmarks`, `likes`, or `both` |
+| `archiveFile` | `./bookmarks.md` | Path to the main archive (point this at your Obsidian vault) |
+| `timezone` | `Asia/Kolkata` | For date formatting in output |
+| `autoInvokeClaude` | `false` | Set `true` to auto-run Claude Code for richer analysis |
+| `claudeModel` | `sonnet` | Model to use: `sonnet`, `haiku`, or `opus` |
+| `ai.openRouterApiKey` | `null` | Set to use OpenRouter instead of Claude Code |
+
+---
+
+## Categories
+
+Categories define how different bookmark types are handled. Folder paths should point into your Obsidian vault.
+
+### Default Categories in This Fork
+
+| Category | Matches | Action | Destination |
+|----------|---------|--------|-------------|
+| **github** | `github.com` | file | `<vault>/X-Clippings/tools/` |
+| **article** | `medium.com`, `substack.com`, `dev.to`, `blog`, `article` | file | `<vault>/X-Clippings/articles/` |
+| **youtube** | `youtube.com`, `youtu.be` | file | `<vault>/X-Clippings/videos/` |
+| **tweet** | (fallback) | capture | `bookmarks.md` only |
+
+### Custom Categories
+
+Add or override in `smaug.config.json`:
+
+```json
+{
+  "categories": {
+    "research": {
+      "match": ["arxiv.org", "papers.", "scholar.google"],
+      "action": "file",
+      "folder": "/path/to/vault/X-Clippings/research",
+      "template": "article",
+      "description": "Academic papers"
+    }
   }
 }
 ```
 
-## What Smaug Actually Does
-
-1. **Fetches bookmarks** from Twitter/X using the bird CLI (can also fetch likes, or both)
-2. **Expands t.co links** to reveal actual URLs
-3. **Extracts content** from linked pages (GitHub repos, articles, quote tweets)
-4. **Invokes Claude Code** to analyze and categorize each tweet
-5. **Saves to markdown** organized by date with rich context
-6. **Files to knowledge library** - GitHub repos to `knowledge/tools/`, articles to `knowledge/articles/`
+---
 
 ## Running Manually
 
 ```bash
-# Full job (fetch + process with Claude)
+# Full job (fetch + process)
 npx smaug run
 
-# Fetch from bookmarks (default)
-npx smaug fetch 20
+# Fetch only (default: 10 bookmarks)
+npx smaug fetch 10
 
 # Fetch from likes instead
 npx smaug fetch --source likes
@@ -108,86 +231,28 @@ npx smaug process --force
 cat .state/pending-bookmarks.json | jq '.count'
 ```
 
-## Categories
+---
 
-Categories define how different bookmark types are handled. Smaug comes with sensible defaults, but you can customize them in `smaug.config.json`.
+## Basic Mode (No Claude)
 
-### Default Categories
-
-| Category | Matches | Action | Destination |
-|----------|---------|--------|-------------|
-| **article** | blogs, news sites, papers, medium.com, substack, etc | file | `./knowledge/articles/` |
-| **github** | github.com | file | `./knowledge/tools/` |
-| **tweet** | (fallback) | capture | bookmarks.md only |
-
-🔜 _Note: Transcription coming soon for podcasts, videos, etc but feel free to edit your own and submit back suggestions!_
-
-### Actions
-
-- **file**: Create a separate markdown file with rich metadata
-- **capture**: Add to bookmarks.md only (no separate file)
-- **transcribe**: Flag for future transcription *(auto-transcription coming soon! PRs welcome)*
-
-### Custom Categories
-
-Add your own categories in `smaug.config.json`:
-
-```json
-{
-  "categories": {
-    "research": {
-      "match": ["arxiv.org", "papers.", "scholar.google"],
-      "action": "file",
-      "folder": "./knowledge/research",
-      "template": "article",
-      "description": "Academic papers"
-    },
-    "newsletter": {
-      "match": ["buttondown.email", "beehiiv.com"],
-      "action": "file",
-      "folder": "./knowledge/newsletters",
-      "template": "article",
-      "description": "Newsletter issues"
-    }
-  }
-}
-```
-
-Your custom categories merge with the defaults. To override a default, use the same key (e.g., `github`, `article`).
-
-## Automation
-
-Run Smaug automatically every 30 minutes:
-
-### Option A: PM2 (recommended)
+If Claude is unavailable (spending cap, no API key, etc.), use the basic processor:
 
 ```bash
-npm install -g pm2
-pm2 start "npx smaug run" --cron "*/30 * * * *" --name smaug
-pm2 save
-pm2 startup    # Start on boot
+# Via shell script
+./smaug-obsidian.sh basic
+
+# Or directly
+npx smaug fetch 10
+node process-basic.js
 ```
 
-### Option B: Cron
+Basic mode writes bookmarks to your archive file without AI categorization or rich metadata — just the tweet text, links, and date. It's a reliable fallback to ensure your pipeline never fully stops.
 
-```bash
-crontab -e
-# Add:
-*/30 * * * * cd /path/to/smaug && npx smaug run >> smaug.log 2>&1
-```
-
-### Option C: systemd
-
-```bash
-# Create /etc/systemd/system/smaug.service
-# See docs/systemd-setup.md for details
-```
+---
 
 ## Output
 
-### bookmarks.md
-
-Your bookmarks organized by date:
+### bookmarks.md (in your Obsidian vault)
 
 ```markdown
 # Thursday, January 2, 2026
@@ -201,19 +266,9 @@ Your bookmarks organized by date:
 - **What:** Free GitHub Pages-hosted tool that renders HTML files from Gists.
 
 ---
-
-## @tom_doerr - Whisper-Flow Real-time Transcription
-> This is amazing - real-time transcription with Whisper
-
-- **Tweet:** https://x.com/tom_doerr/status/987654321
-- **Link:** https://github.com/dimastatz/whisper-flow
-- **Filed:** [whisper-flow.md](./knowledge/tools/whisper-flow.md)
-- **What:** Real-time speech-to-text using OpenAI Whisper with streaming support.
 ```
 
-### knowledge/tools/*.md
-
-GitHub repos get their own files:
+### knowledge/tools/*.md (GitHub repos)
 
 ```markdown
 ---
@@ -226,165 +281,62 @@ via: "Twitter bookmark from @tom_doerr"
 ---
 
 Real-time speech-to-text transcription using OpenAI Whisper...
-
-## Key Features
-- Streaming audio input
-- Multiple language support
-- Low latency output
-
-## Links
-- [GitHub](https://github.com/dimastatz/whisper-flow)
-- [Original Tweet](https://x.com/tom_doerr/status/987654321)
 ```
 
-## Configuration
+### knowledge/videos/*.md (YouTube)
 
-Create `smaug.config.json`:
-
-```json
-{
-  "source": "bookmarks",
-  "archiveFile": "./bookmarks.md",
-  "pendingFile": "./.state/pending-bookmarks.json",
-  "stateFile": "./.state/bookmarks-state.json",
-  "timezone": "America/New_York",
-  "twitter": {
-    "authToken": "your_auth_token",
-    "ct0": "your_ct0"
-  },
-  "autoInvokeClaude": true,
-  "claudeModel": "sonnet",
-  "claudeTimeout": 900000,
-  "allowedTools": "Read,Write,Edit,Glob,Grep,Bash,Task,TodoWrite",
-  "webhookUrl": null,
-  "webhookType": "discord"
-}
+```markdown
+---
+title: "Never Gonna Give You Up"
+type: video
+date_added: 2026-01-02
+source: "https://youtube.com/watch?v=dQw4w9WgXcQ"
+tags: [music, classic]
+via: "Twitter bookmark from @rickastley"
+---
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `source` | `bookmarks` | What to fetch: `bookmarks` (default), `likes`, or `both` |
-| `includeMedia` | `false` | **EXPERIMENTAL**: Include media attachments (photos, videos, GIFs) |
-| `archiveFile` | `./bookmarks.md` | Main archive file |
-| `timezone` | `America/New_York` | For date formatting |
-| `autoInvokeClaude` | `true` | Auto-run Claude Code for analysis |
-| `claudeModel` | `sonnet` | Model to use (`sonnet`, `haiku`, or `opus`) |
-| `claudeTimeout` | `900000` | Max processing time (15 min) |
-| `webhookUrl` | `null` | Discord/Slack webhook for notifications |
-
-Environment variables also work: `AUTH_TOKEN`, `CT0`, `SOURCE`, `INCLUDE_MEDIA`, `ARCHIVE_FILE`, `TIMEZONE`, `CLAUDE_MODEL`, etc.
-
-### Experimental: Media Attachments
-
-Media extraction (photos, videos, GIFs) is available but disabled by default. To enable:
-
-```bash
-# One-time with flag
-npx smaug fetch --media
-
-# Or in config
-{
-  "includeMedia": true
-}
-```
-
-When enabled, the `media[]` array is included in the pending JSON with:
-- `type`: "photo", "video", or "animated_gif"
-- `url`: Full-size media URL
-- `previewUrl`: Thumbnail (smaller, faster)
-- `width`, `height`: Dimensions
-- `videoUrl`, `durationMs`: For videos only
-
-⚠️ **Why experimental?**
-1. **Requires bird with media support** - PR [#14](https://github.com/steipete/bird/pull/14) adds media extraction. Until merged, you'll need a fork with this PR or wait for an upstream release. Without it, `--media` is a no-op (empty array).
-2. **Workflow still being refined** - Short screengrabs (< 30s) don't need transcripts, but longer videos might. We're still figuring out the best handling.
-
-## Claude Code Integration
-
-Smaug uses Claude Code for intelligent bookmark processing. The `.claude/commands/process-bookmarks.md` file contains instructions for:
-
-- Generating descriptive titles (not generic "Article" or "Tweet")
-- Filing GitHub repos to `knowledge/tools/`
-- Filing articles to `knowledge/articles/`
-- Handling quote tweets with full context
-- Processing reply threads with parent context
-- Parallel processing for 3+ bookmarks (using Haiku subagents for cost efficiency)
-
-You can also run processing manually:
-
-```bash
-claude
-> Run /process-bookmarks
-```
-
-### Token Usage Tracking
-
-Track your API costs with the `-t` flag:
-
-```bash
-npx smaug run -t
-# or
-npx smaug run --track-tokens
-```
-
-This displays a breakdown at the end of each run:
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 TOKEN USAGE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Main (sonnet):
-  Input:               85 tokens  <$0.01
-  Output:           5,327 tokens  $0.08
-  Cache Read:     724,991 tokens  $0.22
-  Cache Write:     62,233 tokens  $0.23
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 TOTAL COST: $0.53
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-### Cost Optimization: Haiku Subagents
-
-For batches of 3+ bookmarks, Smaug spawns parallel subagents. By default, these use Haiku instead of Sonnet, which cuts costs nearly in half:
-
-| Configuration | 20 Bookmarks | Time |
-|---------------|--------------|------|
-| Sonnet subagents | $1.00 | 4m 12s |
-| **Haiku subagents** | **$0.53** | 4m 18s |
-
-Same speed, ~50% cheaper. The categorization and filing tasks don't require Sonnet-level reasoning, so Haiku handles them well.
-
-This is configured in `.claude/commands/process-bookmarks.md` with `model="haiku"` in the Task calls.
+---
 
 ## Troubleshooting
 
 ### "No new bookmarks to process"
 
-This means either:
-1. No bookmarks were fetched (check bird CLI credentials)
-2. All fetched bookmarks already exist in `bookmarks.md`
+Either no bookmarks were fetched, or all fetched bookmarks already exist in `bookmarks.md`.
 
-To start fresh:
 ```bash
-rm -rf .state/ bookmarks.md knowledge/
-mkdir -p .state knowledge/tools knowledge/articles
+# Reset and start fresh
+rm -rf .state/ bookmarks.md
+mkdir -p .state
 npx smaug run
 ```
 
 ### Bird CLI 403 errors
 
-Your Twitter cookies may have expired. Get fresh ones from your browser.
+Your Twitter cookies expired. Get fresh `auth_token` and `ct0` values from the browser.
 
-### Processing is slow
+### Claude fails or spending cap hit
 
-- Try `haiku` model instead of `sonnet` in config for faster (but less thorough) processing
-- Make sure you're not re-processing with `--force` (causes edits instead of appends)
+Use basic mode as a fallback:
+
+```bash
+./smaug-obsidian.sh basic
+```
+
+### Plugin not showing in Obsidian
+
+Make sure:
+- The `plugin/` directory is copied to `.obsidian/plugins/smaug-obsidian/`
+- You've run `npm run build` inside `plugin/` so `main.js` is present
+- Community plugins are enabled in Obsidian settings
+
+---
 
 ## Credits
 
-- [bird CLI](https://github.com/steipete/bird) by Peter Steinberger
-- Built with Claude Code
+- **Inspired by [alexknowshtml/smaug](https://github.com/alexknowshtml/smaug)** — the original Smaug project that this fork is built on. All the core archiving logic, Claude Code integration, and category system originate there. Big thanks for the dragon 🐉
+- [bird CLI](https://github.com/steipete/bird) by Peter Steinberger — the Twitter/X API wrapper that makes bookmark fetching possible
+- Built with [Claude Code](https://claude.ai/code)
 
 ## License
 
