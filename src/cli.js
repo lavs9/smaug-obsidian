@@ -13,6 +13,8 @@
  */
 
 import { fetchAndPrepareBookmarks } from './processor.js';
+import { refreshVaultIndex, getVaultContext, loadVaultIndex, findObsidianCLI } from './vault-scanner.js';
+import { loadPreferences, savePreferences, getPreferenceSummary, addLearnedRule } from './preferences.js';
 import { initConfig, loadConfig } from './config.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
@@ -229,6 +231,111 @@ async function main() {
       } catch (err) {
         console.error('Failed to run job:', err.message);
         process.exit(1);
+      }
+      break;
+    }
+
+    case 'vault': {
+      const vaultArgs = args.slice(1);
+      if (vaultArgs.includes('--refresh') || vaultArgs.includes('-r')) {
+        console.log('Refreshing vault index via Obsidian CLI...\n');
+        try {
+          const index = await refreshVaultIndex();
+          console.log(`\n✓ Vault indexed: ${index.tags.length} tags found`);
+        } catch (err) {
+          console.error(`Error: ${err.message}`);
+          console.log('\nTo enable Obsidian CLI:');
+          console.log('  1. Open Obsidian → Settings → General');
+          console.log('  2. Enable "Command line interface"');
+          console.log('  3. Restart terminal');
+        }
+      } else {
+        const config = loadConfig();
+        const context = getVaultContext(config);
+        
+        if (!context.cliAvailable) {
+          console.log('Obsidian CLI not available.\n');
+          console.log('To enable:');
+          console.log('  1. Open Obsidian → Settings → General');
+          console.log('  2. Enable "Command line interface"');
+          console.log('  3. Restart terminal');
+          console.log('\nThen run: npx smaug vault --refresh');
+        } else {
+          console.log('Vault Context (via Obsidian CLI)\n');
+          console.log(`Path:         ${context.vaultPath}`);
+          console.log(`CLI Status:   ✓ Available at ${context.cliPath}`);
+          
+          const index = loadVaultIndex(config);
+          if (index?.tags?.length > 0) {
+            console.log(`\nTags: ${index.tags.slice(0, 30).join(', ')}`);
+            if (index.tags.length > 30) {
+              console.log(`  ... and ${index.tags.length - 30} more`);
+            }
+          } else {
+            console.log('\nRun: npx smaug vault --refresh to index tags');
+          }
+        }
+      }
+      break;
+    }
+
+    case 'prefs':
+    case 'preferences': {
+      const config = loadConfig();
+      const prefsArgs = args.slice(1);
+      
+      if (prefsArgs.includes('--list') || prefsArgs.includes('-l')) {
+        const prefs = loadPreferences(config);
+        const summary = getPreferenceSummary(prefs);
+        console.log('User Preferences\n');
+        console.log(`Learned Rules: ${summary.totalRules}`);
+        console.log(`Folder Mappings: ${summary.folderMappings}`);
+        console.log(`Category Preferences: ${summary.categoryPreferences}`);
+        
+        if (prefs.learnedRules.length > 0) {
+          console.log('\nRecent Rules:');
+          prefs.learnedRules.slice(-5).forEach(r => {
+            console.log(`  - "${r.condition}" → ${r.action} (used ${r.count}x)`);
+          });
+        }
+      } else if (prefsArgs.includes('--add')) {
+        const conditionIdx = prefsArgs.indexOf('--add') + 1;
+        const actionIdx = prefsArgs.indexOf('--action') + 1;
+        
+        if (conditionIdx >= prefsArgs.length || actionIdx >= prefsArgs.length) {
+          console.log('Usage: smaug prefs --add "condition" --action "preferred action"');
+          console.log('Example: smaug prefs --add "trading" --action "Trading"');
+          break;
+        }
+        
+        const condition = prefsArgs[conditionIdx];
+        const action = prefsArgs[actionIdx];
+        
+        const prefs = loadPreferences(config);
+        addLearnedRule(prefs, {
+          conditionType: 'contains',
+          condition,
+          action
+        });
+        savePreferences(prefs, config);
+        console.log(`✓ Added rule: "${condition}" → ${action}`);
+      } else if (prefsArgs.includes('--clear')) {
+        const prefs = loadPreferences(config);
+        prefs.learnedRules = [];
+        prefs.folderMappings = {};
+        prefs.categoryPreferences = {};
+        savePreferences(prefs, config);
+        console.log('✓ Preferences cleared');
+      } else {
+        const prefs = loadPreferences(config);
+        const summary = getPreferenceSummary(prefs);
+        console.log('Preferences\n');
+        console.log(`Rules: ${summary.totalRules} learned`);
+        console.log(`Mappings: ${summary.folderMappings} folder mappings`);
+        console.log('\nCommands:');
+        console.log('  smaug prefs --list          Show all preferences');
+        console.log('  smaug prefs --add "cond" --action "pref"  Add rule');
+        console.log('  smaug prefs --clear         Clear all preferences');
       }
       break;
     }
