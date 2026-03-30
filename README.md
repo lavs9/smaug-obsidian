@@ -38,7 +38,7 @@ Archive your Twitter/X bookmarks (and/or optionally, likes) to markdown. Automat
 # See https://github.com/steipete/bird for installation
 
 # 2. Clone and install Smaug
-git clone https://github.com/alexknowshtml/smaug
+git clone https://github.com/lavs9/smaug-obsidian
 cd smaug
 npm install
 

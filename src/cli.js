@@ -483,7 +483,7 @@ Config (smaug.config.json):
   "includeMedia": false    EXPERIMENTAL: Include media (default: off)
   "folders": {}            Map folder IDs to tags (see README)
 
-More info: https://github.com/alexknowshtml/smaug
+More info: https://github.com/lavs9/smaug-obsidian
 `);
       break;
   }
